@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voronoi 6th Set Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 h-full flex flex-col items-center justify-start p-4 md:p-8 overflow-y-auto">
+
+    <header class="text-center mb-6 max-w-xl">
+        <h1 class="text-2xl md:text-3xl font-bold tracking-tight text-emerald-400">Voronoi 6th Set Generator</h1>
+        <p class="text-xs md:text-sm text-slate-400 mt-1">
+            Randomize 5 seed rows on a 50×50 coordinate plane, then compute the geometrically derived 6th set.
+        </p>
+    </header>
+
+    <main class="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+        <!-- Left Column: Controls & Seed Rows -->
+        <section class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <h2 class="text-sm font-semibold tracking-wide uppercase text-slate-300">Seed Rows (1 to 5)</h2>
+                <button id="global-randomize" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg font-medium transition active:scale-95">
+                    Randomize All Seeds
+                </button>
+            </div>
+
+            <!-- 5 Rows of 6 Seed Points -->
+            <div id="seed-rows-container" class="flex flex-col gap-3">
+                <!-- Dynamically injected via JavaScript -->
+            </div>
+
+            <div class="mt-2 pt-3 border-t border-slate-800">
+                <!-- Big Green Button to generate 6th set -->
+                <button id="generate-btn" class="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-4 px-6 rounded-xl shadow-lg shadow-emerald-900/30 transition transform active:scale-[0.99] flex items-center justify-center gap-2 text-base md:text-lg">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    Generate 6th Set via Voronoi
+                </button>
+            </div>
+        </section>
+
+        <!-- Right Column: Visualization & Output Results -->
+        <section class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col items-center gap-4">
+            <h2 class="text-sm font-semibold tracking-wide uppercase text-slate-300 w-full text-left border-b border-slate-800 pb-3">
+                Plane & Result View
+            </h2>
+
+            <!-- Canvas Container -->
+            <div class="relative w-full aspect-square bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center">
+                <canvas id="voronoi-canvas" class="w-full h-full block"></canvas>
+                <div id="canvas-overlay" class="absolute inset-0 pointer-events-none flex items-center justify-center text-slate-600 text-xs font-mono">
+                    50 × 50 Coordinate Grid
+                </div>
+            </div>
+
+            <!-- Result Display for 6th Set -->
+            <div class="w-full bg-slate-950 border border-emerald-900/50 rounded-xl p-4 flex flex-col gap-2">
+                <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400">Computed 6th Set (6 Integers < 50):</span>
+                <div id="result-display" class="grid grid-cols-6 gap-2 text-center font-mono font-bold text-lg md:text-xl text-emerald-300">
+                    <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                    <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                    <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                    <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                    <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                    <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // State representation: 5 rows, each containing 6 integer points {x, y} (< 50)
+        let seedRows = [];
+
+        // Initialize state with random numbers < 50
+        function initSeeds() {
+            seedRows = [];
+            for (let r = 0; r < 5; r++) {
+                let row = [];
+                for (let c = 0; c < 6; c++) {
+                    row.push({
+                        x: Math.floor(Math.random() * 46) + 2, // keep away from absolute borders
+                        y: Math.floor(Math.random() * 46) + 2
+                    });
+                }
+                seedRows.push(row);
+            }
+        }
+
+        // Render seed rows controls
+        function renderSeedControls() {
+            const container = document.getElementById('seed-rows-container');
+            container.innerHTML = '';
+
+            seedRows.forEach((row, rIndex) => {
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 gap-2';
+
+                // Label and Row Randomizer button
+                const headerDiv = document.createElement('div');
+                headerDiv.className = 'flex items-center justify-between w-full sm:w-auto gap-3';
+                
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'text-xs font-mono font-medium text-emerald-400';
+                titleSpan.innerText = `Row ${rIndex + 1}`;
+                headerDiv.appendChild(titleSpan);
+
+                const randomizeRowBtn = document.createElement('button');
+                randomizeRowBtn.className = 'text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded transition';
+                randomizeRowBtn.innerText = 'Randomize Row';
+                randomizeRowBtn.onclick = () => {
+                    randomizeSingleRow(rIndex);
+                };
+                headerDiv.appendChild(randomizeRowBtn);
+                rowDiv.appendChild(headerDiv);
+
+                // Values pills container
+                const valuesDiv = document.createElement('div');
+                valuesDiv.className = 'grid grid-cols-6 gap-1 w-full sm:w-auto';
+
+                row.forEach((pt, cIndex) => {
+                    const pill = document.createElement('div');
+                    pill.className = 'bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-center font-mono text-xs text-slate-300';
+                    pill.innerText = `${pt.x},${pt.y}`;
+                    valuesDiv.appendChild(pill);
+                });
+
+                rowDiv.appendChild(valuesDiv);
+                container.appendChild(rowDiv);
+            });
+        }
+
+        function randomizeSingleRow(rIndex) {
+            for (let c = 0; c < 6; c++) {
+                seedRows[rIndex][c] = {
+                    x: Math.floor(Math.random() * 46) + 2,
+                    y: Math.floor(Math.random() * 46) + 2
+                };
+            }
+            renderSeedControls();
+            drawVoronoi();
+        }
+
+        function randomizeAll() {
+            initSeeds();
+            renderSeedControls();
+            drawVoronoi();
+            // Reset output result view
+            document.getElementById('result-display').innerHTML = `
+                <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+                <span class="bg-slate-900 py-2 rounded-lg border border-slate-800">--</span>
+            `;
+        }
+
+        // Draw Voronoi cells and scan line on canvas
+        let lastScanY = null;
+        let computedSixthSet = null;
+
+        function drawVoronoi() {
+            const canvas = document.getElementById('voronoi-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set internal resolution for crisp rendering
+            const size = 300;
+            canvas.width = size;
+            canvas.height = size;
+
+            // Collect all 30 seed points
+            let allPoints = [];
+            seedRows.forEach(row => {
+                row.forEach(pt => allPoints.push(pt));
+            });
+
+            // Scale factor from 50x50 coordinate space to canvas size
+            const scale = size / 50;
+
+            // Clear background
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, size, size);
+
+            // Approximate Voronoi cells using pixel coloring or sampling for clean browser performance
+            // We loop through a grid of pixels or sample cell ownership
+            const step = 2; // pixel step for performance
+            for (let px = 0; px < size; px += step) {
+                for (let py = 0; py < size; py += step) {
+                    const gx = px / scale;
+                    const gy = py / scale;
+
+                    // Find closest seed point
+                    let minDist = Infinity;
+                    let closestIndex = 0;
+                    allPoints.forEach((pt, idx) => {
+                        let dist = Math.hypot(pt.x - gx, pt.y - gy);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestIndex = idx;
+                        }
+                    });
+
+                    // Assign subtle color based on closest seed index group
+                    const hue = (closestIndex * 37) % 360;
+                    ctx.fillStyle = `hsla(${hue}, 60%, 15%, 0.4)`;
+                    ctx.fillRect(px, py, step, step);
+                }
+            }
+
+            // Draw grid lines & boundaries
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 50; i += 10) {
+                ctx.beginPath();
+                ctx.moveTo(i * scale, 0);
+                ctx.lineTo(i * scale, size);
+                ctx.stroke();
+
+                ctx.beginPath();
+                ctx.moveTo(0, i * scale);
+                ctx.lineTo(size, i * scale);
+                ctx.stroke();
+            }
+
+            // Draw seed points
+            allPoints.forEach((pt, idx) => {
+                const hue = (idx * 37) % 360;
+                ctx.fillStyle = `hsl(${hue}, 80%, 60%)`;
+                ctx.beginPath();
+                ctx.arc(pt.x * scale, pt.y * scale, 4, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#020617';
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+            });
+
+            // If we have a computed scan line / 6th set, render it visually
+            if (lastScanY !== null) {
+                ctx.strokeStyle = '#34d399';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(0, lastScanY * scale);
+                ctx.lineTo(size, lastScanY * scale);
+                ctx.stroke();
+                ctx.setLineDash([]); // reset
+
+                // Draw intersection points for the 6th set
+                if (computedSixthSet) {
+                    computedSixthSet.forEach(val => {
+                        ctx.fillStyle = '#10b981';
+                        ctx.beginPath();
+                        ctx.arc(val * scale, lastScanY * scale, 5, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    });
+                }
+            }
+        }
+
+        // Generate 6th set logic via Voronoi sampling
+        function generateSixthSet() {
+            // Choose a deterministic scan height based on seed variance
+            let allPoints = [];
+            seedRows.forEach(row => row.forEach(pt => allPoints.push(pt)));
+            
+            // Calculate center of mass of existing points to determine a meaningful scan line y-coordinate
+            let sumY = allPoints.reduce((acc, pt) => acc + pt.y, 0);
+            let avgY = sumY / allPoints.length;
+            
+            // Define scan line y-coordinate for the 6th set (< 50)
+            lastScanY = Math.round((avgY + 25) % 44) + 3;
+
+            // Find 6 intersection points along this horizontal scan line by checking Voronoi cell boundary transitions
+            let intersectionXs = [];
+            let prevOwner = -1;
+
+            for (let gx = 1; gx < 49; gx += 0.5) {
+                // Find closest seed to (gx, lastScanY)
+                let minDist = Infinity;
+                let closestIndex = 0;
+                allPoints.forEach((pt, idx) => {
+                    let dist = Math.hypot(pt.x - gx, pt.y - lastScanY);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestIndex = idx;
+                    }
+                });
+
+                if (prevOwner !== -1 && prevOwner !== closestIndex) {
+                    // Cell boundary crossing detected!
+                    let intVal = Math.round(gx);
+                    if (!intersectionXs.includes(intVal) && intVal > 0 && intVal < 50) {
+                        intersectionXs.push(intVal);
+                    }
+                }
+                prevOwner = closestIndex;
+            }
+
+            // If we didn't get exactly 6 intersections due to uniform spacing, sample fallback coordinates derived from cell centroids
+            let sixthSet = [];
+            for (let i = 0; i < 6; i++) {
+                if (i < intersectionXs.length) {
+                    sixthSet.push(intersectionXs[i]);
+                } else {
+                    // Fallback geometric projection
+                    let fallback = (allPoints[i * 4].x + allPoints[i * 4 + 1].x + lastScanY) % 47 + 1;
+                    while(sixthSet.includes(fallback)) {
+                        fallback = (fallback + 3) % 49 + 1;
+                    }
+                    sixthSet.push(fallback);
+                }
+            }
+
+            // Ensure we strictly take 6 integers all less than 50
+            computedSixthSet = sixthSet.slice(0, 6).map(n => Math.abs(n) % 50);
+
+            // Update UI Result display
+            const resultContainer = document.getElementById('result-display');
+            resultContainer.innerHTML = '';
+            computedSixthSet.forEach(num => {
+                const span = document.createElement('span');
+                span.className = 'bg-emerald-950/80 text-emerald-300 py-2 rounded-lg border border-emerald-800/80 shadow-inner';
+                span.innerText = num;
+                resultContainer.appendChild(span);
+            });
+
+            // Redraw canvas with scan line and intersection markers
+            drawVoronoi();
+        }
+
+        // Attach event listeners
+        document.getElementById('global-randomize').onclick = randomizeAll;
+        document.getElementById('generate-btn').onclick = generateSixthSet;
+
+        // Initial setup on load
+        window.onload = () => {
+            initSeeds();
+            renderSeedControls();
+            drawVoronoi();
+        };
+    </script>
+</body>
+</html>
